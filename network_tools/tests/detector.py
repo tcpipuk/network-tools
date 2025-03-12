@@ -20,14 +20,19 @@ from __future__ import annotations
 import asyncio
 import ssl
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import aiohttp
-import asyncssh
+from aiohttp import ClientSession
+from asyncssh import Error as SSHError, connect as ssh_connect
 
-from .cli import log
-from .telnet import AsyncTelnetClient
-from .types import DetectionResult
+from network_tools.cli import log
+from network_tools.clients.telnet import AsyncTelnetClient
+from network_tools.types import DetectionResult
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
+
+    from asyncssh import SSHClientConnection
 
 # Telnet protocol constants
 IAC_BYTE = 0xFF  # Interpret As Command byte
@@ -94,12 +99,10 @@ class AsyncProtocolDetector:
                 initial_data
                 and all(b in range(256) for b in initial_data)
                 and any(b == IAC_BYTE for b in initial_data)
-            ):  # IAC byte
+            ):
                 return DetectionResult(protocol="TELNET", banner=initial_data)
-
             # Unknown protocol that sends data
             return DetectionResult(protocol="UNKNOWN_BANNER", banner=initial_data)
-
         except TimeoutError:
             # No immediate data - silent protocol
             return DetectionResult(protocol="UNKNOWN")
@@ -112,16 +115,13 @@ class AsyncProtocolDetector:
         """
         # If we already have an open connection, close it
         await self._close_connection()
-
         # Try HTTPS detection
         if await self._is_tls(host, port):
             return DetectionResult(protocol="HTTPS")
-
         # Try HTTP detection
         result = await self._is_http(host, port)
         if result.protocol == "HTTP":
             return result
-
         # Default to unknown
         return DetectionResult(protocol="UNKNOWN")
 
@@ -184,49 +184,54 @@ class AsyncProtocolDetector:
             self._current_writer = None
             self._current_reader = None
 
-    async def get_client(self, detection_result: DetectionResult, host: str, port: int) -> Any:
+    async def get_client(
+        self, detection_result: DetectionResult, host: str, port: int
+    ) -> AsyncGenerator[Any]:
         """Return appropriate client for the detected protocol.
 
         Reuses the existing connection if possible.
 
-        Returns:
+        Yields:
             Appropriate client for the detected protocol, or None if the protocol is not supported.
         """
-        if detection_result.protocol == "SSH":
-            return await self._get_ssh_client(host, port)
-        if detection_result.protocol == "HTTP":
-            return await self._get_http_client(host, port, False)
-        if detection_result.protocol == "HTTPS":
-            return await self._get_http_client(host, port, True)
-        if detection_result.protocol == "TELNET":
-            return await self._get_telnet_client(host, port)
-        return None
+        match detection_result.protocol:
+            case "HTTP":
+                yield await self._get_http_client(host, port, False)
+            case "HTTPS":
+                yield await self._get_http_client(host, port, True)
+            case "SSH":
+                yield await self._get_ssh_client(host, port)
+            case "TELNET":
+                yield await self._get_telnet_client(host, port)
+            case _:
+                log.error("Unsupported protocol: %s", detection_result.protocol)
 
-    async def _get_ssh_client(self, host: str, port: int) -> asyncssh.SSHClientConnection | None:
+    async def _get_ssh_client(self, host: str, port: int) -> AsyncGenerator[SSHClientConnection]:
         """Get SSH client, closing the detection connection first.
 
-        Returns:
+        Yields:
             SSH client, or None if the connection fails.
-        """
-        # We need to close our connection as asyncssh will create its own
-        await self._close_connection()
 
+        Raises:
+            asyncssh.Error: If the connection fails.
+            OSError: If the connection fails.
+        """
+        await self._close_connection()
         # Create an asyncssh client
         try:
-            return await asyncssh.connect(
-                host=host,
-                port=port,
-                known_hosts=None,
-                # Credentials should be provided by caller, not hardcoded
-            )
-        except (asyncssh.Error, OSError):
+            client = await ssh_connect(host=host, port=port, known_hosts=None)
+            yield client
+            # Close the client if it's not already closed
+            if not client.is_closed():
+                await client.close()
+        except (SSHError, OSError):
             log.exception("SSH connection error")
-            return None
+            raise
 
-    async def _get_http_client(self, host: str, port: int, is_https: bool) -> aiohttp.ClientSession:
+    async def _get_http_client(self, host: str, port: int, is_https: bool) -> AsyncGenerator[ClientSession]:
         """Get HTTP/HTTPS client session.
 
-        Returns:
+        Yields:
             HTTP/HTTPS client session, or None if the connection fails.
         """
         # We need to close our detection connection as aiohttp will create its own
@@ -237,12 +242,14 @@ class AsyncProtocolDetector:
         base_url = f"{scheme}://{host}:{port}"
 
         # Create aiohttp session
-        return aiohttp.ClientSession(base_url=base_url)
+        client = ClientSession(base_url=base_url)
+        yield client
+        await client.close()
 
-    async def _get_telnet_client(self, host: str, port: int) -> AsyncTelnetClient:
+    async def _get_telnet_client(self, host: str, port: int) -> AsyncGenerator[AsyncTelnetClient]:
         """Get telnet client, potentially reusing the connection.
 
-        Returns:
+        Yields:
             Telnet client, or None if the connection fails.
         """
         # Close existing connection as we'll create a new one for the client
@@ -251,5 +258,7 @@ class AsyncProtocolDetector:
         # Create a simple async telnet client
         # Since telnetlib is deprecated, we implement a basic one
         client = AsyncTelnetClient(host, port)
+
         await client.connect()
-        return client
+        yield client
+        await client.close()

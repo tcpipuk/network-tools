@@ -1,4 +1,4 @@
-r"""Asynchronous Telnet client implementation module.
+"""Asynchronous Telnet client implementation module.
 
 This module provides a modern asynchronous Telnet client implementation as a
 replacement for the deprecated telnetlib standard library module.
@@ -6,32 +6,6 @@ replacement for the deprecated telnetlib standard library module.
 The AsyncTelnetClient class offers a simple interface for connecting to Telnet
 services, reading and writing data, and properly closing connections. It is built
 using Python's asyncio framework for efficient I/O operations.
-
-Example:
-    Basic usage of the Telnet client:
-
-    ```python
-    import asyncio
-    from network_tools.telnet import AsyncTelnetClient
-
-    async def main():
-        client = AsyncTelnetClient('192.168.1.1', 23)
-        if await client.connect():
-            # Read initial banner
-            data = await client.read()
-            print(data)
-
-            # Send a command
-            await client.write(b'show version\r\n')
-
-            # Read response
-            response = await client.read()
-            print(response)
-
-            await client.close()
-
-    asyncio.run(main())
-    ```
 """
 
 from __future__ import annotations
@@ -39,7 +13,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 
-from .cli import log
+from network_tools.cli import log
 
 
 @dataclass(slots=True)

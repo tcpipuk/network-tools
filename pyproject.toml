@@ -19,15 +19,13 @@ classifiers = [
 dependencies = [
   "aiofiles>=24",
   "aiohttp>=3",
-  "asyncssh>=2.20.0",
-  "openpyxl>=3",
+  "asyncssh>=2",
   "pandas>=2",
   "pytest>=8",
   "pytest-asyncio>=0.25",
   "pytest-timeout>=2",
   "pytz>=2025",
-  "rich>=13.9.4",
-  "tabulate>=0.9",
+  "rich>=13",
 ]
 
 [project.urls]

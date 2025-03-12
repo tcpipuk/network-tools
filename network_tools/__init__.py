@@ -21,33 +21,24 @@ See example.py for a thorough usage example.
 from __future__ import annotations
 
 from .cli import (
-    add_output_arguments,
-    add_protocol_arguments,
     complete_progress,
     console,
-    create_parser,
     create_progress,
-    create_subparsers,
     log,
     parse_args,
     update_progress,
 )
-from .detector import AsyncProtocolDetector
-from .telnet import AsyncTelnetClient
+from .clients.telnet import AsyncTelnetClient
+from .tests.detector import AsyncProtocolDetector
 from .types import DetectionResult
 
 __all__ = [
     "AsyncProtocolDetector",
     "AsyncTelnetClient",
     "DetectionResult",
-    "add_output_arguments",
-    "add_protocol_arguments",
     "complete_progress",
     "console",
-    "create_parser",
     "create_progress",
-    "create_subparsers",
-    "log",
     "log",
     "parse_args",
     "update_progress",

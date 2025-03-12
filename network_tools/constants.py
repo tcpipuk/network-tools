@@ -18,16 +18,13 @@ CLI_ARGUMENTS: dict[str, list[tuple[Any]]] = {
         (["target"], {"help": "Target hostname or IP address", "nargs": "?"}),
         (
             ["-p", "--port"],
-            {"choices": range(1, 65536), "help": "Target port number", "metavar": "[1-65535]"},
+            {"choices": range(1, 65536), "help": "Target port number", "metavar": "1-65535"},
         ),
         (
             ["-t", "--timeout"],
             {"type": float, "default": 10.0, "help": "Connection timeout in seconds (default: %(default)s)"},
         ),
-        (
-            ["-v", "--verbose"],
-            {"action": "count", "default": 0, "help": "Increase verbosity (can be used multiple times)"},
-        ),
+        (["-v", "--verbose"], {"action": "count", "default": 0, "help": "Increase verbosity"}),
         (["-q", "--quiet"], {"action": "store_true", "help": "Suppress non-error output"}),
     ],
     # Protocol options
@@ -52,4 +49,4 @@ command line interfaces built with the network tools package. It includes
 common network-related arguments and allows for command-specific subparsers.
 """
 CLI_HELP_EPILOGUE: str | None = None
-CLI_HELP_NAME: str = "Network tools"
+CLI_HELP_NAME: str = "network_tools"
