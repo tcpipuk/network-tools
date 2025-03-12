@@ -13,6 +13,7 @@ Core components:
 - AsyncTelnetClient: Modern async replacement for the deprecated telnetlib
 - DetectionResult: Structured container for protocol detection results
 - Console: Rich-based console with integrated logging and progress bars
+- CLI Argument Parser: Standard argument parsing for network tool commands
 
 See example.py for a thorough usage example.
 """
@@ -20,10 +21,15 @@ See example.py for a thorough usage example.
 from __future__ import annotations
 
 from .cli import (
+    add_output_arguments,
+    add_protocol_arguments,
     complete_progress,
     console,
+    create_parser,
     create_progress,
-    logger,
+    create_subparsers,
+    log,
+    parse_args,
     update_progress,
 )
 from .detector import AsyncProtocolDetector
@@ -34,9 +40,15 @@ __all__ = [
     "AsyncProtocolDetector",
     "AsyncTelnetClient",
     "DetectionResult",
+    "add_output_arguments",
+    "add_protocol_arguments",
     "complete_progress",
     "console",
+    "create_parser",
     "create_progress",
-    "logger",
+    "create_subparsers",
+    "log",
+    "log",
+    "parse_args",
     "update_progress",
 ]

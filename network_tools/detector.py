@@ -25,7 +25,7 @@ from typing import Any
 import aiohttp
 import asyncssh
 
-from .cli import logger
+from .cli import log
 from .telnet import AsyncTelnetClient
 from .types import DetectionResult
 
@@ -60,7 +60,7 @@ class AsyncProtocolDetector:
             # If passive detection fails, try active probing
             return await self._active_detection(host, port)
         except Exception as e:
-            logger.exception(f"Detection error on {host}:{port}: {e!s}")
+            log.exception("Detection error on %s:%s", host, port)
             # Close connection if open
             await self._close_connection()
             return DetectionResult(protocol="ERROR", extra_info={"error": str(e)})
@@ -219,8 +219,8 @@ class AsyncProtocolDetector:
                 known_hosts=None,
                 # Credentials should be provided by caller, not hardcoded
             )
-        except (asyncssh.Error, OSError) as e:
-            logger.exception(f"SSH connection error: {e!s}")
+        except (asyncssh.Error, OSError):
+            log.exception("SSH connection error")
             return None
 
     async def _get_http_client(self, host: str, port: int, is_https: bool) -> aiohttp.ClientSession:

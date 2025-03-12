@@ -71,6 +71,7 @@ ignore = [
   "PLR0917", # too many positional arguments
   "RUF029",  # async methods that don't await
   "S110",    # passed exceptions
+  "TRY301",  # raise inside try block
 ]
 select = ["ALL"]
 unfixable = [

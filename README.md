@@ -61,7 +61,7 @@ It's built with modern async Python to make your network operations more efficie
 ```python
 from asyncio import run
 from network_tools import AsyncProtocolDetector
-from network_tools.console import logger
+from network_tools.console import log
 
 async def main():
     # Create detector
@@ -71,12 +71,12 @@ async def main():
     host = "192.168.1.1"
     port = 22
 
-    logger.info(f"Scanning {host}:{port}")
+    log.info("Scanning %s:%s", host, port)
     result = await detector.detect(host, port)
 
     # Handle detected protocol
     if result.protocol != "UNKNOWN":
-        logger.info(f"Detected protocol: {result.protocol}")
+        log.info("Detected protocol: %s", result.protocol)
 
         # Get appropriate client
         client = await detector.get_client(result, host, port)
@@ -85,12 +85,12 @@ async def main():
         if result.protocol == "SSH":
             async with client.start_session() as session:
                 output = await session.run("show version")
-                logger.info(f"Command output: {output.stdout}")
+                log.info("Command output: %s", output.stdout)
 
         # Close client connection
         client.close()
     else:
-        logger.info(f"No protocol detected on {host}:{port}")
+        log.info("No protocol detected on %s:%s", host, port)
 
 if __name__ == "__main__":
     run(main())

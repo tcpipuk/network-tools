@@ -28,14 +28,14 @@ It's built on [Rich](https://github.com/Textualize/rich), which provides text fo
 ### Show log messages
 
 ```python
-from network_tools.console import logger
+from network_tools.console import log
 
 # Use standard logging levels
-logger.debug("Technical details for troubleshooting")
-logger.info("General information")
-logger.warning("Something needs attention")
-logger.error("Something went wrong")
-logger.critical("Urgent problem")
+log.debug("Technical details for troubleshooting")
+log.info("General information")
+log.warning("Something needs attention")
+log.error("Something went wrong")
+log.critical("Urgent problem")
 ```
 
 You can create your own logger too:
@@ -72,7 +72,7 @@ for i in range(10):
     time.sleep(0.5)
 
     # Log information during progress
-    logger.info(f"Processing device {i+1}/10")
+    log.info("Processing device %d/10", i+1)
 
     # Update the progress bar
     update_progress(task_id, advance=1, description=f"Processing device {i+1}/10")
@@ -86,7 +86,7 @@ complete_progress(task_id, description="All devices processed")
 ```python
 import asyncio
 from network_tools.console import create_progress, update_progress, complete_progress
-from network_tools.console import logger
+from network_tools.console import log
 
 async def process_device(device_id, total_steps):
     # Create a progress bar for this device
@@ -98,7 +98,7 @@ async def process_device(device_id, total_steps):
 
         # Log occasionally
         if step % 3 == 0:
-            logger.info(f"Device {device_id}: Processing step {step+1}/{total_steps}")
+            log.info("Device %d: Processing step %d/%d", device_id, step+1, total_steps)
 
         # Update progress
         update_progress(task_id, advance=1,
@@ -124,7 +124,7 @@ asyncio.run(main())
 ### Core components
 
 - `console`: for direct output
-- `logger`: for log messages
+- `log`: for log messages
 - `progress`: for creating progress bars
 - `live_display`: manages both logs and progress bars
 

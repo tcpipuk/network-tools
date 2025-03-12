@@ -3,11 +3,6 @@
 This module provides a standardised console setup for the network tools package,
 configuring a Rich-based console with integrated logging and progress bars.
 
-Key features:
-1. Rich-formatted logging that appears above any progress bars
-2. Progress bars that stay pinned to the bottom of the screen
-3. Thread-safe operations for concurrent updates
-
 For detailed documentation and examples, see docs/console.md
 """
 
@@ -94,7 +89,7 @@ logging.basicConfig(
 )
 
 # Get the logger for this module
-logger = getLogger("network_tools")
+log = getLogger("network_tools")
 
 
 def start_live_display() -> None:
@@ -166,7 +161,7 @@ def update_progress(
     """
     with progress_lock:
         if task_id not in _active_tasks:
-            logger.warning("Attempted to update non-existent progress task: %s", task_id)
+            log.warning("Attempted to update non-existent progress task: %s", task_id)
             return
 
         progress_task_id = _active_tasks[task_id]
@@ -196,7 +191,7 @@ def complete_progress(task_id: str, description: str | None = None) -> None:
     """
     with progress_lock:
         if task_id not in _active_tasks:
-            logger.warning("Attempted to complete non-existent progress task: %s", task_id)
+            log.warning("Attempted to complete non-existent progress task: %s", task_id)
             return
 
         progress_task_id = _active_tasks[task_id]

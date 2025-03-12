@@ -39,7 +39,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 
-from .cli import logger
+from .cli import log
 
 
 @dataclass(slots=True)
@@ -63,7 +63,7 @@ class AsyncTelnetClient:
                 self.host, self.port, timeout=self.timeout
             )
         except (TimeoutError, ConnectionRefusedError, OSError):
-            logger.exception("Telnet connection error")
+            log.exception("Telnet connection error")
             return False
         else:
             return True
