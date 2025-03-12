@@ -1,0 +1,94 @@
+[project]
+name = "network-tools"
+description = "A small suite of async network tools for Python."
+version = "0.1.0"
+readme = "README.md"
+license = { text = "GPL-3.0-or-later" }
+authors = [{ name = "Tom Foster", email = "tom@tcpip.uk" }]
+maintainers = [{ name = "Tom Foster", email = "tom@tcpip.uk" }]
+requires-python = ">=3.13"
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "License :: OSI Approved :: General Public License v3 or later (GPLv3+)",
+  "Topic :: Communications :: Chat",
+  "Framework :: AsyncIO",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+  "aiofiles>=24",
+  "aiohttp>=3",
+  "asyncssh>=2.20.0",
+  "openpyxl>=3",
+  "pandas>=2",
+  "pytest>=8",
+  "pytest-asyncio>=0.25",
+  "pytest-timeout>=2",
+  "pytz>=2025",
+  "rich>=13.9.4",
+  "tabulate>=0.9",
+]
+
+[project.urls]
+Homepage = "https://github.com/tcpipuk/network-tools"
+
+[dependency-groups]
+dev = ["ruff>=0.9"]
+
+[tool.pytest.ini_options]
+addopts = "-v"
+asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "session"
+cache_dir = "/tmp/.pytest_cache"
+filterwarnings = []
+testpaths = "tests"
+
+[tool.ruff]
+cache-dir = "/tmp/.ruff_cache"
+fix = true
+line-length = 110
+preview = true
+show-fixes = false
+target-version = "py313"
+unsafe-fixes = true
+
+[tool.ruff.format]
+line-ending = "auto"
+skip-magic-trailing-comma = false
+
+[tool.ruff.lint]
+fixable = ["ALL"]
+ignore = [
+  "ANN401",  # use of Any type
+  "BLE001",  # blind Exception usage
+  "COM812",  # missing trailing comma
+  "CPY",     # flake8-copyright
+  "FBT",     # boolean arguments
+  "PLR0912", # too many branches
+  "PLR0913", # too many arguments
+  "PLR0915", # too many statements
+  "PLR0917", # too many positional arguments
+  "RUF029",  # async methods that don't await
+  "S110",    # passed exceptions
+]
+select = ["ALL"]
+unfixable = [
+  "F841",   # local variable assigned but never used
+  "RUF100", # unused noqa comments
+  "T201",   # don't strip print statement
+]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+required-imports = ["from __future__ import annotations"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+  "ARG",    # Ignore argument issues in test files
+  "RET",    # Ignore return issues in test files
+  "SLF001", # private member access
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
