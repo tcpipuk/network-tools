@@ -14,6 +14,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+type JSON_TYPE = bool | dict[str, JSON_TYPE] | float | int | list[JSON_TYPE] | str | None
+
 
 @dataclass(slots=True)
 class DetectionResult:

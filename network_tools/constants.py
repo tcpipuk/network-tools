@@ -13,40 +13,47 @@ MAX_PORT = 65535
 # CLI constants
 
 CLI_ARGUMENTS: dict[str, list[tuple[Any]]] = {
-    # Common networking arguments
     "common": [
-        (["target"], {"help": "Target hostname or IP address", "nargs": "?"}),
+        (["-t", "--timeout"], {"type": float, "default": 10.0, "metavar": "<10>"}),
+        (["-v", "--verbose"], {"action": "count", "default": 0}),
+    ],
+    "operation": [
         (
-            ["-p", "--port"],
-            {"choices": range(1, 65536), "help": "Target port number", "metavar": "1-65535"},
+            ["-m", "--mode"],
+            {
+                "choices": ["banner", "connect", "fingerprint", "probe", "scan"],
+                "metavar": "banner|connect|fingerprint|probe|scan",
+                "required": True,
+            },
         ),
         (
-            ["-t", "--timeout"],
-            {"type": float, "default": 10.0, "help": "Connection timeout in seconds (default: %(default)s)"},
+            ["-p", "--protocol"],
+            {
+                "choices": ["auto", "http", "https", "ssh", "telnet"],
+                "default": "auto",
+                "metavar": "<auto>|http|https|ssh|telnet",
+            },
         ),
-        (["-v", "--verbose"], {"action": "count", "default": 0, "help": "Increase verbosity"}),
-        (["-q", "--quiet"], {"action": "store_true", "help": "Suppress non-error output"}),
     ],
-    # Protocol options
-    "protocols": [
-        (["--ssh"], {"action": "store_true", "help": "Force SSH protocol detection"}),
-        (["--http"], {"action": "store_true", "help": "Force HTTP protocol detection"}),
-        (["--https"], {"action": "store_true", "help": "Force HTTPS protocol detection"}),
-        (["--telnet"], {"action": "store_true", "help": "Force Telnet protocol detection"}),
-        (["--ftp"], {"action": "store_true", "help": "Force FTP protocol detection"}),
-    ],
-    # Output options
-    "output": [
-        (["--json"], {"action": "store_true", "help": "Output results in JSON format"}),
-        (["--csv"], {"action": "store_true", "help": "Output results in CSV format"}),
-        (["-o", "--output"], {"help": "Save output to file"}),
+    "files": [
+        (["-i", "--input"], {"help": "Input file path", "required": True}),
+        (
+            ["-if", "--input-format"],
+            {"choices": ["csv", "json"], "default": "csv", "metavar": "<csv>|json"},
+        ),
+        (["-o", "--output"], {"help": "Output file path (default: stdout)"}),
+        (
+            ["-of", "--output-format"],
+            {"choices": ["csv", "json", "plain"], "default": "plain", "metavar": "csv|json|<plain>"},
+        ),
     ],
 }
-CLI_HELP_DESCRIPTION: str = """Command line interface for network tools.
+CLI_HELP_DESCRIPTION: str = """Network tools: detect, analyse and interact with network services.
 
-This module provides a configurable and extensible argument parser for
-command line interfaces built with the network tools package. It includes
-common network-related arguments and allows for command-specific subparsers.
+This tool helps you identify protocols running on network devices,
+test connectivity, scan for services, and retrieve information
+from compatible network endpoints. Use different modes to perform
+specific operations, with customisable input and output options.
 """
-CLI_HELP_EPILOGUE: str | None = None
+CLI_HELP_EPILOGUE: str | None = "If an argument has a default, it's shown in <parentheses>."
 CLI_HELP_NAME: str = "network_tools"

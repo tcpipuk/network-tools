@@ -27,13 +27,8 @@ from .console import log
 def parse_args() -> Arguments:
     """Create a standard argument parser with common network tool arguments.
 
-    Args:
-        description: Description of the tool
-        epilog: Text to display after the argument help
-        prog: The name of the program
-
     Returns:
-        Configured ArgumentParser instance
+        Configured arguments instance
     """
     # Create the parser
     parser = ArgumentParser(

@@ -34,6 +34,16 @@ Homepage = "https://github.com/tcpipuk/network-tools"
 [dependency-groups]
 dev = ["ruff>=0.9"]
 
+[tool.uv]
+package = true
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project.scripts]
+network-tools = "network_tools.__main__:launch"
+
 [tool.pytest.ini_options]
 addopts = "-v"
 asyncio_mode = "strict"

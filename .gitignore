@@ -9,3 +9,6 @@ venv/
 # Local config
 .env
 *.log
+
+# Build files
+*.egg-info
