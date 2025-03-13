@@ -86,14 +86,25 @@ jobs:
         continue-on-error: true
         run: |
           source .venv/bin/activate
+
+          # Add test results to summary
           echo "## Pytest Results" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          pytest -v --log-level=WARNING >> $GITHUB_STEP_SUMMARY
-          exit_code=$?
+          # Run pytest with coverage but don't display coverage in the output
+          pytest -v --no-cov --log-level=WARNING | tee /tmp/pytest_output.txt
+          test_exit_code=${PIPESTATUS[0]}
+          cat /tmp/pytest_output.txt >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
 
-          echo "exit_code=$exit_code" >> $GITHUB_OUTPUT
-          exit $exit_code
+          # Add coverage report to summary using the standalone coverage command
+          echo "## Test Coverage" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          coverage report >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+          # Use the test exit code for the overall step result
+          echo "exit_code=$test_exit_code" >> $GITHUB_OUTPUT
+          exit $test_exit_code
 
       - name: Summary
         if: always()
@@ -126,5 +137,5 @@ jobs:
           if [[ "$failed" == "true" ]]; then
             exit 1
           else
-            echo "🎉 **All steps completed successfully**" >> $GITHUB_STEP_SUMMARY
+            echo "🎉 All steps completed successfully" >> $GITHUB_STEP_SUMMARY
           fi
