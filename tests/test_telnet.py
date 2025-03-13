@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from asyncio import CancelledError as AsyncioCancelledError
+from contextlib import suppress as contextlib_suppress
 from logging import Logger, getLogger
-from typing import TYPE_CHECKING
-from unittest.mock import patch
+from typing import TYPE_CHECKING, Never
+from unittest.mock import MagicMock, patch
 
 import pytest
 from pytest_asyncio import fixture as asyncio_fixture
@@ -185,6 +187,12 @@ async def patch_client_methods() -> AsyncGenerator[None]:
     original_complete_negotiation = AsyncTelnetClient._complete_negotiation
     original_read = AsyncTelnetClient.read
     original_write = AsyncTelnetClient.write
+    original_interactive_reader = AsyncTelnetClient._interactive_reader
+
+    # Create a non-coroutine version of _interactive_reader to prevent unawaited coroutines
+    def patched_interactive_reader(self) -> None:
+        """Patched version that doesn't return a coroutine to avoid warnings."""
+        return None
 
     # Apply patches
     AsyncTelnetClient.connect = patched_connect_method
@@ -192,6 +200,7 @@ async def patch_client_methods() -> AsyncGenerator[None]:
     AsyncTelnetClient.read = patched_read_method
     AsyncTelnetClient.write = patched_write
     AsyncTelnetClient._process_negotiation = original_process_negotiation
+    AsyncTelnetClient._interactive_reader = patched_interactive_reader
 
     yield
 
@@ -200,6 +209,7 @@ async def patch_client_methods() -> AsyncGenerator[None]:
     AsyncTelnetClient.connect = original_connect
     AsyncTelnetClient.write = original_write
     AsyncTelnetClient._process_negotiation = original_process_negotiation
+    AsyncTelnetClient._interactive_reader = original_interactive_reader
 
 
 @pytest.mark.asyncio
@@ -332,21 +342,35 @@ async def test_read_write_data(host: str, port: int) -> None:
 @pytest.mark.asyncio
 async def test_read_until(host: str, port: int) -> None:
     """Test reading until specific pattern."""
-    prompt = b"$ "
+    # Test with a simple literal pattern (no regex)
+    prompt = b"-> "
     test_data = [
         b"Some initial data\r\n",
         b"More data\r\n",
-        b"Final line$ ",
+        b"Final line-> ",  # Simple ending with ->
     ]
     client = AsyncTelnetClient(host=host, port=port)
     client.reader = MockStreamReader(test_data)
     client.writer = MockStreamWriter()
 
-    # Test reading until prompt
+    # Test reading until prompt (literal string matching)
     data = await client.read_until(prompt, time_limit=1.0)
     expected = b"".join(test_data)
     if data != expected:
         pytest.fail(f"Read until data mismatch.\nExpected: {expected!r}\nGot: {data!r}")
+
+    # Test with a regex pattern
+    test_data_regex = [
+        b"Command output\r\n",
+        b"$> ",  # Contains $ which is a regex special char
+    ]
+    client.reader = MockStreamReader(test_data_regex)
+
+    # Use regex mode with a pattern matching $>
+    data = await client.read_until(b"\\$>", time_limit=1.0)
+    expected = b"".join(test_data_regex)
+    if data != expected:
+        pytest.fail(f"Read until data with regex pattern mismatch.\nExpected: {expected!r}\nGot: {data!r}")
 
 
 @pytest.mark.asyncio
@@ -447,3 +471,265 @@ async def test_read_until_timeout(host: str, port: int) -> None:
     expected_msg = f"Timeout waiting for {prompt!r}"
     if str(exc_info.value) != expected_msg:
         pytest.fail(f"Unexpected error message.\nExpected: {expected_msg}\nGot: {exc_info.value!s}")
+
+
+@pytest.mark.asyncio
+async def test_connect_to_class_method(host: str, port: int) -> None:
+    """Test the connect_to class method for creating and connecting clients."""
+    # Test successful connection
+    with patch(
+        "network_tools.clients.telnet.client.AsyncTelnetClient.connect", return_value=True
+    ) as mock_connect:
+        # The issue is with time_limit, we need to use connect_timeout instead
+        client = await AsyncTelnetClient.connect_to(host, port, connect_timeout=5.0)
+
+        # Verify the client was created with correct parameters
+        if client.host != host:
+            pytest.fail(f"Host mismatch. Expected: {host}, Got: {client.host}")
+        if client.port != port:
+            pytest.fail(f"Port mismatch. Expected: {port}, Got: {client.port}")
+        if not mock_connect.called:
+            pytest.fail("connect method was not called")
+
+    # Test connection failure
+    with patch("network_tools.clients.telnet.client.AsyncTelnetClient.connect", return_value=False):
+        try:
+            await AsyncTelnetClient.connect_to(host, port)
+            pytest.fail("ConnectionError not raised on failed connection")
+        except ConnectionError as e:
+            expected_msg = f"Failed to connect to {host}:{port}"
+            if str(e) != expected_msg:
+                pytest.fail(f"Unexpected error message. Expected: {expected_msg}, Got: {e!s}")
+
+
+@pytest.mark.asyncio
+async def test_read_until_prompt(host: str, port: int) -> None:
+    """Test reading until a command prompt."""
+    # Test with default prompt - create data that ends with the actual prompt
+    test_data = [
+        b"Command output line 1\r\n",
+        b"Command output line 2\r\n",
+        b"router# ",  # Ends with '#' which is part of the [>#$] character class
+    ]
+
+    client = AsyncTelnetClient(host=host, port=port)
+    client.reader = MockStreamReader(test_data)
+    client.writer = MockStreamWriter()
+
+    # Test with default prompt
+    data = await client.read_until_prompt(time_limit=1.0)
+    expected = b"".join(test_data)
+    if data != expected:
+        pytest.fail(
+            f"Read until prompt data mismatch with default prompt.\nExpected: {expected!r}\nGot: {data!r}"
+        )
+
+    # Test with custom prompt (literal match, not character class)
+    custom_prompt = b"router>"
+    test_data_custom = [
+        b"Different output\r\n",
+        b"router>",  # Custom prompt
+    ]
+    client.reader = MockStreamReader(test_data_custom)
+
+    data = await client.read_until_prompt(prompt=custom_prompt, time_limit=1.0)
+    expected = b"".join(test_data_custom)
+    if data != expected:
+        pytest.fail(
+            f"Read until prompt data mismatch with custom prompt.\nExpected: {expected!r}\nGot: {data!r}"
+        )
+
+
+@pytest.mark.asyncio
+async def test_send_command(host: str, port: int) -> None:
+    """Test sending commands to the telnet device."""
+    client = AsyncTelnetClient(host=host, port=port)
+    client.writer = MockStreamWriter()
+
+    # Test with default newline
+    command = "show version"
+    await client.send_command(command)
+    expected = b"show version\r\n"
+    if client.writer.written_data[-1] != expected:
+        pytest.fail(
+            f"Send command data mismatch with default newline.\nExpected: {expected!r}\n"
+            f"Got: {client.writer.written_data[-1]!r}"
+        )
+
+    # Test with custom newline
+    custom_newline = "\n"
+    await client.send_command(command, newline=custom_newline)
+    expected = b"show version\n"
+    if client.writer.written_data[-1] != expected:
+        pytest.fail(
+            f"Send command data mismatch with custom newline.\nExpected: {expected!r}\n"
+            f"Got: {client.writer.written_data[-1]!r}"
+        )
+
+    # Test with empty command
+    await client.send_command("")
+    expected = b"\r\n"
+    if client.writer.written_data[-1] != expected:
+        pytest.fail(
+            f"Send command data mismatch with empty command.\nExpected: {expected!r}\n"
+            f"Got: {client.writer.written_data[-1]!r}"
+        )
+
+
+@pytest.mark.asyncio
+async def test_interact_method(host: str, port: int) -> None:
+    """Test the interactive session functionality."""
+    client = AsyncTelnetClient(host=host, port=port)
+    client.reader = MockStreamReader([b"Welcome to test device\r\n", b"> "])
+    client.writer = MockStreamWriter()
+
+    # Create a proper awaitable mock task
+    class AsyncMock(MagicMock):
+        def __await__(self):
+            async def _async_wrapper() -> None:
+                return None
+
+            return _async_wrapper().__await__()
+
+    # Create an awaitable mock task
+    mock_task = AsyncMock()
+
+    # Create a Future that we can resolve in our mock run_in_executor
+    async def mock_run_in_executor(*args) -> str:
+        # Return the command first time, raise KeyboardInterrupt second time
+        if not hasattr(mock_run_in_executor, "called"):
+            mock_run_in_executor.called = True
+            return "show test"
+        raise KeyboardInterrupt
+
+    # Set up the event loop mock
+    mock_loop = MagicMock()
+    mock_loop.run_in_executor = mock_run_in_executor
+
+    with (
+        patch(
+            "network_tools.clients.telnet.client.asyncio_create_task", return_value=mock_task
+        ) as mock_create_task,
+        patch("network_tools.clients.telnet.client.asyncio_get_event_loop", return_value=mock_loop),
+    ):
+        # Call the interact method - it should exit after KeyboardInterrupt
+        await client.interact()
+
+        # Verify create_task was called for the interactive reader
+        if not mock_create_task.called:
+            pytest.fail("asyncio_create_task was not called")
+
+        # Verify the task was cancelled
+        if not mock_task.cancel.called:
+            pytest.fail("The read task was not cancelled")
+
+        # Ensure mock task is fully cleaned up
+        if hasattr(mock_task, "__await__") and callable(mock_task.__await__):
+            with contextlib_suppress(AsyncioCancelledError, Exception):
+                await mock_task
+
+        # Check if at least one command was sent
+        command_sent = False
+        for data in client.writer.written_data:
+            if b"show test\r\n" in data:
+                command_sent = True
+                break
+
+        if not command_sent:
+            pytest.fail("Command was not sent during interaction")
+
+    # Ensure client is properly closed
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_close_with_exception(host: str, port: int) -> None:
+    """Test error handling during connection closure."""
+    client = AsyncTelnetClient(host=host, port=port)
+
+    # Create a mock writer that raises exception on wait_closed
+    mock_writer = MockStreamWriter()
+
+    # Override wait_closed to raise an exception
+    original_wait_closed = mock_writer.wait_closed
+
+    async def mock_wait_closed_with_error() -> Never:
+        msg = "Error during close"
+        raise ConnectionError(msg)
+
+    mock_writer.wait_closed = mock_wait_closed_with_error
+    client.writer = mock_writer
+    client.reader = MockStreamReader([])
+
+    # Close should not raise exception despite the error
+    try:
+        await client.close()
+    except Exception as e:
+        pytest.fail(f"close() raised unexpected exception: {e}")
+
+    # Verify writer and reader are cleared despite exception
+    if client.writer is not None:
+        pytest.fail("Writer was not cleared after exception during close")
+    if client.reader is not None:
+        pytest.fail("Reader was not cleared after exception during close")
+
+    # Restore original method
+    mock_writer.wait_closed = original_wait_closed
+
+
+@pytest.mark.asyncio
+async def test_advanced_negotiation(host: str, port: int) -> None:
+    """Test more complex telnet option negotiations."""
+    client = AsyncTelnetClient(host=host, port=port)
+    client.writer = MockStreamWriter()
+
+    # Create complex negotiation data including subnegotiation
+    subneg_start = bytes([TelnetCommand.IAC, TelnetCommand.SB, TelnetOption.TERMINAL_TYPE])
+    subneg_data = b"\x00VT100"  # SEND followed by terminal type
+    subneg_end = bytes([TelnetCommand.IAC, TelnetCommand.SE])
+
+    test_data = (
+        bytes([TelnetCommand.IAC, TelnetCommand.DO, TelnetOption.ECHO])
+        + bytes([TelnetCommand.IAC, TelnetCommand.WILL, TelnetOption.SGA])
+        + subneg_start
+        + subneg_data
+        + subneg_end
+        + b"Regular data"
+    )
+
+    client.reader = MockStreamReader([test_data])
+
+    # Process the data
+    result = await client.read(1024)
+
+    # Verify regular data is returned
+    if result != b"Regular data":
+        pytest.fail(
+            f"Advanced negotiation regular data mismatch.\nExpected: b'Regular data'\nGot: {result!r}"
+        )
+
+    # Verify at least some response was sent (specific response depends on implementation)
+    if not client.writer.written_data:
+        pytest.fail("No responses sent for advanced negotiation commands")
+
+
+@pytest.mark.asyncio
+async def test_read_with_character_class(host: str, port: int) -> None:
+    """Test reading until a character class pattern."""
+    # Test with character class pattern [abc]
+    prompt_pattern = b"[abc]"
+    test_data = [
+        b"Line one\r\n",
+        b"Line two\r\n",
+        b"Line ending with a",  # Ends with 'a' which is in [abc]
+    ]
+
+    client = AsyncTelnetClient(host=host, port=port)
+    client.reader = MockStreamReader(test_data)
+    client.writer = MockStreamWriter()
+
+    # Use regex mode for character class
+    data = await client.read_until(prompt_pattern, time_limit=1.0)
+    expected = b"".join(test_data)
+    if data != expected:
+        pytest.fail(f"Character class pattern match failed.\nExpected: {expected!r}\nGot: {data!r}")

@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from network_tools.types import JSON_TYPE
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(slots=True)
 class FileReader:
     """Read hosts from a file."""
 
@@ -37,13 +37,13 @@ class FileReader:
                 raise ValueError(msg)
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(slots=True)
 class FileWriter:
-    """Read hosts from a CSV file."""
+    """Write data to a file in various formats."""
 
     path: Path
-    type: Literal["csv", "json", "plain"] = field(init=False)
-    data: JSON_TYPE = field(init=False)
+    type: Literal["csv", "json", "plain"]
+    data: JSON_TYPE
 
     def __post_init__(self) -> None:
         """Initialise the file writer.
@@ -59,10 +59,20 @@ class FileWriter:
             case "json":
                 json_dump(self.data, self.path)
             case "plain":
+                # Prepare the content to write based on data type
+                content: str
                 if isinstance(self.data, list):
-                    self.data = "\n".join(self.data)
-                # Write text
-                self.path.write_text("\n".join(self.data))
+                    # Join list items with newlines
+                    content = "\n".join(self.data)
+                elif isinstance(self.data, dict):
+                    # Format dictionary as "key: value" pairs, one per line
+                    lines = [f"{key}: {value}" for key, value in self.data.items()]
+                    content = "\n".join(lines)
+                else:
+                    # Use the data as is for other types, converting to string if needed
+                    content = str(self.data)
+                # Write the prepared content
+                self.path.write_text(content)
             case _:
                 msg = f"Invalid file type: {self.type}"
                 raise ValueError(msg)

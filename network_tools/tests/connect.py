@@ -6,9 +6,15 @@ concurrently, with configurable timeouts and concurrency limits.
 
 from __future__ import annotations
 
-import asyncio
-import socket
+from asyncio import (
+    Semaphore,
+    gather as asyncio_gather,
+    get_event_loop as asyncio_get_event_loop,
+    open_connection as asyncio_open_connection,
+    wait_for as asyncio_wait_for,
+)
 from dataclasses import dataclass
+from socket import gaierror as socket_gaierror
 from typing import Any
 
 from network_tools.cli.console import complete_progress, create_progress, log, update_progress
@@ -50,14 +56,14 @@ async def try_connect(host: str, port: int, time_limit: float) -> ConnectionResu
     Returns:
         ConnectionResult with connection details
     """
-    start_time = asyncio.get_event_loop().time()
+    start_time = asyncio_get_event_loop().time()
 
     try:
         # Create socket object
-        _reader, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=time_limit)
+        _reader, writer = await asyncio_wait_for(asyncio_open_connection(host, port), timeout=time_limit)
 
         # If we get here, connection was successful
-        elapsed_ms = (asyncio.get_event_loop().time() - start_time) * 1000
+        elapsed_ms = (asyncio_get_event_loop().time() - start_time) * 1000
 
         # Properly close the connection
         writer.close()
@@ -66,13 +72,13 @@ async def try_connect(host: str, port: int, time_limit: float) -> ConnectionResu
         return ConnectionResult(host=host, port=port, success=True, time_ms=round(elapsed_ms, 2))
 
     except TimeoutError:
-        elapsed_ms = (asyncio.get_event_loop().time() - start_time) * 1000
+        elapsed_ms = (asyncio_get_event_loop().time() - start_time) * 1000
         return ConnectionResult(
             host=host, port=port, success=False, time_ms=round(elapsed_ms, 2), error="Connection timed out"
         )
 
-    except socket.gaierror as e:
-        elapsed_ms = (asyncio.get_event_loop().time() - start_time) * 1000
+    except socket_gaierror as e:
+        elapsed_ms = (asyncio_get_event_loop().time() - start_time) * 1000
         return ConnectionResult(
             host=host,
             port=port,
@@ -82,13 +88,13 @@ async def try_connect(host: str, port: int, time_limit: float) -> ConnectionResu
         )
 
     except OSError as e:
-        elapsed_ms = (asyncio.get_event_loop().time() - start_time) * 1000
+        elapsed_ms = (asyncio_get_event_loop().time() - start_time) * 1000
         return ConnectionResult(
             host=host, port=port, success=False, time_ms=round(elapsed_ms, 2), error=str(e)
         )
 
     except Exception as e:
-        elapsed_ms = (asyncio.get_event_loop().time() - start_time) * 1000
+        elapsed_ms = (asyncio_get_event_loop().time() - start_time) * 1000
         return ConnectionResult(
             host=host,
             port=port,
@@ -113,7 +119,7 @@ async def test_connections(
         List of ConnectionResult objects for each connection attempt
     """
     # Create a semaphore to limit concurrency
-    semaphore = asyncio.Semaphore(max_concurrency)
+    semaphore = Semaphore(max_concurrency)
 
     # Calculate total number of connection attempts
     total_tests = len(hosts) * len(ports)
@@ -137,7 +143,7 @@ async def test_connections(
 
     try:
         # Run all tasks concurrently and collect results
-        results = await asyncio.gather(*tasks)
+        results = await asyncio_gather(*tasks)
         # Complete the progress bar
         complete_progress(task_id, f"Completed {total_tests} connection tests")
     except Exception as e:

@@ -84,7 +84,7 @@ complete_progress(task_id, description="All devices processed")
 ### Track multiple tasks at once
 
 ```python
-import asyncio
+from asyncio import gather as asyncio_gather, run as asyncio_run, sleep as asyncio_sleep
 from network_tools.console import create_progress, update_progress, complete_progress
 from network_tools.console import log
 
@@ -94,7 +94,7 @@ async def process_device(device_id, total_steps):
 
     for step in range(total_steps):
         # Do some work
-        await asyncio.sleep(0.2)
+        await asyncio_sleep(0.2)
 
         # Log occasionally
         if step % 3 == 0:
@@ -109,14 +109,14 @@ async def process_device(device_id, total_steps):
 
 async def main():
     # Process multiple devices at the same time
-    await asyncio.gather(
+    await asyncio_gather(
         process_device(1, 5),
         process_device(2, 8),
         process_device(3, 3)
     )
 
 # Run the async main function
-asyncio.run(main())
+asyncio_run(main())
 ```
 
 ## Available functions

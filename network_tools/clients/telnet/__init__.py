@@ -5,7 +5,7 @@ for communicating with legacy devices that still use telnet.
 
 Example usage:
     ```python
-    import asyncio
+    from asyncio import run as asyncio_run
     from network_tools.clients.telnet import AsyncTelnetClient
 
     async def main():
@@ -14,7 +14,7 @@ Example usage:
             response = await client.read_until_prompt()
             print(response.decode())
 
-    asyncio.run(main())
+    asyncio_run(main())
     ```
 """
 

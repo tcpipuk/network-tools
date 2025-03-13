@@ -52,7 +52,7 @@ network-tools = "network_tools.__main__:launch"
 packages = ["network_tools"]
 
 [tool.pytest.ini_options]
-addopts = "-v --capture=no --cov=network_tools --cov-report= --strict-markers --strict-config"
+addopts = "-v --capture=no --cov=network_tools --strict-markers --strict-config"
 asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "session"
 cache_dir = "/tmp/.pytest_cache"
@@ -115,11 +115,12 @@ required-imports = ["from __future__ import annotations"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = [
-  "ANN001", # Ignore missing type annotations
-  "ARG",    # Ignore argument issues in test files
+  "ANN",    # Ignore missing type annotations
+  "ARG",    # Ignore argument issues
+  "C901",   # Ignore complex methods
   "DOC201", # Ignore "return" in docstrings
   "DOC402", # Ignore "yield" in docstrings
-  "RET",    # Ignore return issues in test files
+  "RET",    # Ignore return issues
   "SLF001", # private member access
 ]
 

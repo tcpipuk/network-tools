@@ -10,10 +10,20 @@ using Python's asyncio framework for efficient I/O operations.
 
 from __future__ import annotations
 
-import asyncio
-import contextlib
-from asyncio import StreamReader, StreamWriter, open_connection
+from asyncio import (
+    CancelledError as AsyncioCancelledError,
+    StreamReader,
+    StreamWriter,
+    create_task as asyncio_create_task,
+    get_event_loop as asyncio_get_event_loop,
+    open_connection,
+    sleep as asyncio_sleep,
+    timeout as asyncio_timeout,
+    wait_for as asyncio_wait_for,
+)
+from contextlib import suppress as contextlib_suppress
 from dataclasses import dataclass, field
+from re import compile as re_compile, error as re_error
 from typing import Any, ClassVar, Self
 
 from network_tools.cli import log
@@ -68,7 +78,7 @@ class AsyncTelnetClient:
     negotiator: TelnetNegotiator = field(init=False)
 
     # Common prompt patterns for telnet devices - users can override
-    DEFAULT_PROMPT: ClassVar[bytes] = b"[>#$] $"
+    DEFAULT_PROMPT: ClassVar[bytes] = b"[>#$]"
 
     def __post_init__(self) -> None:
         """Initialise negotiator with our settings."""
@@ -79,7 +89,7 @@ class AsyncTelnetClient:
         )
 
     @classmethod
-    async def connect_to(cls, host: str, port: int, time_limit: float = 5.0, **kwargs: Any) -> Self:
+    async def connect_to(cls, host: str, port: int, connect_timeout: float = 5.0, **kwargs: Any) -> Self:
         """Create and connect to a telnet server in one step.
 
         This factory method creates a client instance and establishes a connection
@@ -88,7 +98,7 @@ class AsyncTelnetClient:
         Args:
             host: The hostname or IP address of the telnet server
             port: The port number of the telnet server
-            time_limit: Connection timeout in seconds
+            connect_timeout: Connection timeout in seconds
             **kwargs: Additional parameters to pass to the AsyncTelnetClient constructor
 
         Returns:
@@ -97,7 +107,7 @@ class AsyncTelnetClient:
         Raises:
             ConnectionError: If the connection attempt fails
         """
-        client = cls(host=host, port=port, time_limit=time_limit, **kwargs)
+        client = cls(host=host, port=port, connect_timeout=connect_timeout, **kwargs)
         if not await client.connect():
             msg = f"Failed to connect to {host}:{port}"
             raise ConnectionError(msg)
@@ -146,7 +156,7 @@ class AsyncTelnetClient:
             return True
 
         try:
-            async with asyncio.timeout(self.connect_timeout):
+            async with asyncio_timeout(self.connect_timeout):
                 log.info("Connecting with telnet to %s:%d", self.host, self.port)
                 self.reader, self.writer = await open_connection(self.host, self.port)
 
@@ -170,11 +180,11 @@ class AsyncTelnetClient:
             return
 
         # Give the server a moment to send initial negotiations
-        await asyncio.sleep(0.1)
+        await asyncio_sleep(0.1)
 
         # Try to read initial negotiation data
         try:
-            data = await asyncio.wait_for(self.reader.read(1024), timeout=1.0)
+            data = await asyncio_wait_for(self.reader.read(1024), timeout=1.0)
             if data:
                 log.debug("Received %d bytes during initial negotiation", len(data))
                 await self._process_negotiation(data)
@@ -221,7 +231,7 @@ class AsyncTelnetClient:
             time_limit = self.read_timeout
 
         try:
-            raw_data = await asyncio.wait_for(self.reader.read(size), timeout=time_limit)
+            raw_data = await asyncio_wait_for(self.reader.read(size), timeout=time_limit)
 
             # Process any telnet commands
             return await self._process_negotiation(raw_data)
@@ -236,6 +246,8 @@ class AsyncTelnetClient:
 
         Raises:
             TimeoutError: If the pattern is not found within the timeout
+            UnicodeDecodeError: If the pattern cannot be decoded
+            re.error: If the pattern is not a valid regex
         """
         if not self.reader:
             return b""
@@ -248,15 +260,24 @@ class AsyncTelnetClient:
         view = memoryview(buffer)
         pos = 0
 
-        start_time = asyncio.get_event_loop().time()
+        # Compile the regex pattern once if using regex mode
+        pattern = None
+        try:
+            decoded = expected.decode("utf-8", errors="replace")
+            pattern = re_compile(decoded)
+        except (re_error, UnicodeDecodeError):
+            log.warning("Failed to compile regex pattern: %r", expected)
+            raise
+
+        start_time = asyncio_get_event_loop().time()
         end_time = start_time + time_limit
 
-        while asyncio.get_event_loop().time() < end_time:
-            remaining = end_time - asyncio.get_event_loop().time()
+        while asyncio_get_event_loop().time() < end_time:
+            remaining = end_time - asyncio_get_event_loop().time()
             chunk = await self.read(time_limit=min(1.0, remaining))
 
             if not chunk:
-                await asyncio.sleep(0.01)
+                await asyncio_sleep(0.01)
                 continue
 
             # Ensure buffer has enough space
@@ -270,9 +291,13 @@ class AsyncTelnetClient:
             view[pos : pos + len(chunk)] = chunk
             pos += len(chunk)
 
-            # Check if pattern exists in the new data plus a small overlap
-            if expected in buffer[max(0, pos - len(expected) - len(chunk)) : pos]:
-                return bytes(buffer[:pos])
+            # Check for pattern match
+            current_buffer = bytes(buffer[:pos])
+
+            # Use regex pattern matching
+            text_to_search = current_buffer.decode("utf-8", errors="replace")
+            if pattern.search(text_to_search):
+                return current_buffer
 
         msg = f"Timeout waiting for {expected!r}"
         raise TimeoutError(msg)
@@ -349,18 +374,18 @@ class AsyncTelnetClient:
         log.info("Press Ctrl+C to exit")
 
         # Set up a task to read from the telnet connection
-        read_task = asyncio.create_task(self._interactive_reader())
+        read_task = asyncio_create_task(self._interactive_reader())
 
         try:
             # Read from stdin and send to telnet
             while True:
-                line = await asyncio.get_event_loop().run_in_executor(None, input, "")
+                line = await asyncio_get_event_loop().run_in_executor(None, input, "")
                 await self.send_command(line)
         except (KeyboardInterrupt, EOFError):
             log.info("\nExiting interactive session")
         finally:
             read_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
+            with contextlib_suppress(AsyncioCancelledError):
                 await read_task
 
     async def _interactive_reader(self) -> None:
@@ -375,7 +400,7 @@ class AsyncTelnetClient:
                 else:
                     # Adaptive sleep - increase sleep time when idle
                     idle_count = min(idle_count + 1, 10)
-                    await asyncio.sleep(0.05 * idle_count)
+                    await asyncio_sleep(0.05 * idle_count)
         except Exception:
             log.exception("Error in telnet reader")
 
