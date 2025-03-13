@@ -176,12 +176,12 @@ class AsyncTelnetClient:
             data = await asyncio.wait_for(self.reader.read(1024), timeout=1.0)
             if data:
                 log.debug("Received %d bytes during initial negotiation", len(data))
-                self._process_negotiation(data)
+                await self._process_negotiation(data)
         except TimeoutError:
             # No initial negotiation data, that's okay
             pass
 
-    def _process_negotiation(self, data: bytes) -> bytes:
+    async def _process_negotiation(self, data: bytes) -> bytes:
         """Process any telnet negotiation commands in the data.
 
         Args:
@@ -200,7 +200,7 @@ class AsyncTelnetClient:
             # Combine all responses into single bytes object
             combined_response = b"".join(responses)
             self.writer.write(combined_response)
-            self.writer.drain()
+            await self.writer.drain()
 
         return processed_data
 
@@ -223,7 +223,7 @@ class AsyncTelnetClient:
             raw_data = await asyncio.wait_for(self.reader.read(size), timeout=time_limit)
 
             # Process any telnet commands
-            return self._process_negotiation(raw_data)
+            return await self._process_negotiation(raw_data)
         except TimeoutError:
             return b""
 

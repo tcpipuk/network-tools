@@ -12,7 +12,7 @@ efficient network operations.
 
 from __future__ import annotations
 
-from pkg_resources import get_distribution
+from importlib.metadata import version
 
 from .cli import (
     complete_progress,
@@ -23,13 +23,9 @@ from .cli import (
     update_progress,
 )
 from .clients.telnet import AsyncTelnetClient
-from .tests.detector import AsyncProtocolDetector
-from .types import DetectionResult
 
 __all__ = [
-    "AsyncProtocolDetector",
     "AsyncTelnetClient",
-    "DetectionResult",
     "complete_progress",
     "console",
     "create_progress",
@@ -38,4 +34,4 @@ __all__ = [
     "update_progress",
 ]
 
-__version__ = get_distribution(__name__).version
+__version__ = version(__name__)

@@ -14,9 +14,7 @@ It's built with modern async Python to make your network operations more efficie
 
 ## Core components
 
-- `AsyncProtocolDetector`: identifies protocols on network devices
 - `AsyncTelnetClient`: modern replacement for the deprecated telnetlib
-- `DetectionResult`: stores protocol detection results
 - `Console`: shows logs and progress bars using Rich
 
 ## How to install
