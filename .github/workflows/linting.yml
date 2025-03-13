@@ -91,16 +91,14 @@ jobs:
           echo "## Pytest Results" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           # Run pytest with coverage but don't display coverage in the output
-          pytest -v --no-cov --log-level=WARNING | tee /tmp/pytest_output.txt
+          pytest -v --log-level=WARNING | tee /tmp/pytest_output.txt
           test_exit_code=${PIPESTATUS[0]}
           cat /tmp/pytest_output.txt >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
 
           # Add coverage report to summary using the standalone coverage command
           echo "## Test Coverage" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          coverage report >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          coverage report --format=markdown --show-missing >> $GITHUB_STEP_SUMMARY
 
           # Use the test exit code for the overall step result
           echo "exit_code=$test_exit_code" >> $GITHUB_OUTPUT
