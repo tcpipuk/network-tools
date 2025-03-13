@@ -1,4 +1,4 @@
-name: Build and Test
+name: Linting and Testing
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
