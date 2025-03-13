@@ -1,0 +1,140 @@
+name: Lint and Test
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Runtime
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare uv
+        uses: astral-sh/setup-uv@v5
+        continue-on-error: true
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            **/pyproject.toml
+            **/uv.lock
+
+      - name: Prepare environment
+        continue-on-error: true
+        run: |
+          uv venv .venv
+          source .venv/bin/activate
+          uv sync --active --dev
+
+      - name: Check linting - Ruff Check
+        id: ruff-check
+        continue-on-error: true
+        run: |
+          source .venv/bin/activate
+          echo "## Ruff Check" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          ruff check . --output-format=concise >> $GITHUB_STEP_SUMMARY
+          exit_code=$?
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+          echo "exit_code=$exit_code" >> $GITHUB_OUTPUT
+          exit $exit_code
+
+      - name: Check linting - Ruff Format
+        id: ruff-format
+        continue-on-error: true
+        run: |
+          source .venv/bin/activate
+          echo "## Ruff Format" >> $GITHUB_STEP_SUMMARY
+
+          # Run the command and capture its exit code
+          ruff format --check --diff . >> /tmp/ruff_format_output 2>&1
+          exit_code=$?
+
+          # Check if the output file has content (other than whitespace)
+          if [ ! -s /tmp/ruff_format_output ] || ! grep -q '[^[:space:]]' /tmp/ruff_format_output; then
+            echo "✅ No formatting issues found" >> $GITHUB_STEP_SUMMARY
+          else
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat /tmp/ruff_format_output >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "exit_code=$exit_code" >> $GITHUB_OUTPUT
+          exit $exit_code
+
+      - name: Run tests
+        id: run-tests
+        continue-on-error: true
+        run: |
+          source .venv/bin/activate
+
+          # Add test results to summary
+          echo "## Pytest Results" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          # Run pytest with coverage but don't display coverage in the output
+          pytest -v --cov="network_tools" --cov-report="" --log-level=WARNING >> $GITHUB_STEP_SUMMARY
+          exit_code=$?
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+          # Add coverage report to summary using the standalone coverage command
+          echo "## Test Coverage" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          coverage report --format=text --show-missing >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+          # Use the test exit code for the overall step result
+          echo "exit_code=$exit_code" >> $GITHUB_OUTPUT
+          exit $exit_code
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          failed=false
+
+          if [[ "${{ steps.ruff-check.outcome }}" == "failure" ]]; then
+            echo "❌ Ruff Check failed" >> $GITHUB_STEP_SUMMARY
+            failed=true
+          else
+            echo "✅ Ruff Check passed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [[ "${{ steps.ruff-format.outcome }}" == "failure" ]]; then
+            echo "❌ Ruff Format failed" >> $GITHUB_STEP_SUMMARY
+            failed=true
+          else
+            echo "✅ Ruff Format passed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [[ "${{ steps.run-tests.outcome }}" == "failure" ]]; then
+            echo "❌ Tests failed" >> $GITHUB_STEP_SUMMARY
+            failed=true
+          else
+            echo "✅ Tests passed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [[ "$failed" == "true" ]]; then
+            exit 1
+          else
+            echo "🎉 All steps completed successfully" >> $GITHUB_STEP_SUMMARY
+          fi
