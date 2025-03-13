@@ -97,7 +97,9 @@ jobs:
 
           # Add coverage report to summary using the standalone coverage command
           echo "## Test Coverage" >> $GITHUB_STEP_SUMMARY
-          coverage report --format=markdown --show-missing >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          coverage report --format=text --show-missing >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
 
           # Use the test exit code for the overall step result
           echo "exit_code=$exit_code" >> $GITHUB_OUTPUT
