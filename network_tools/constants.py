@@ -7,7 +7,6 @@ from typing import Any
 
 # Network protocol constants
 
-IAC_BYTE = 0xFF  # Interpret As Command byte
 MIN_PORT = 1
 MAX_PORT = 65535
 
