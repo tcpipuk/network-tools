@@ -52,7 +52,7 @@ network-tools = "network_tools.__main__:launch"
 packages = ["network_tools"]
 
 [tool.pytest.ini_options]
-addopts = "-v --capture=no --cov-report= --strict-markers --strict-config"
+addopts = "-v --capture=no --cov=network_tools --cov-report= --strict-markers --strict-config"
 asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "session"
 cache_dir = "/tmp/.pytest_cache"

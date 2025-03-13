@@ -1,4 +1,4 @@
-name: Linting and Testing
+name: Lint and Test
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   build:
-    name: Linting and Testing
+    name: Runtime
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -91,7 +91,7 @@ jobs:
           echo "## Pytest Results" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           # Run pytest with coverage but don't display coverage in the output
-          pytest -v --log-level=WARNING >> $GITHUB_STEP_SUMMARY
+          pytest -v --cov="network_tools" --cov-report="" --log-level=WARNING >> $GITHUB_STEP_SUMMARY
           exit_code=$?
           echo '```' >> $GITHUB_STEP_SUMMARY
 
