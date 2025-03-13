@@ -42,7 +42,7 @@ jobs:
         run: |
           uv venv .venv
           source .venv/bin/activate
-          uv sync --active --dev --no-install-project
+          uv sync --active --dev
 
       - name: Check linting - Ruff Check
         id: ruff-check

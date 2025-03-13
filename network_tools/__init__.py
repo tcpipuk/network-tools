@@ -33,5 +33,4 @@ __all__ = [
     "parse_args",
     "update_progress",
 ]
-
-__version__ = version(__name__)
+__version__ = version("network_tools")
