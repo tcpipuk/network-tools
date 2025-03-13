@@ -26,6 +26,7 @@ dependencies = [
   "pytest-timeout>=2",
   "pytz>=2025",
   "rich>=13",
+  "setuptools>=76",
 ]
 
 [project.urls]

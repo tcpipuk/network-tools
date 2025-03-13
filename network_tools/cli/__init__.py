@@ -9,9 +9,12 @@ from __future__ import annotations
 
 from .args import parse_args
 from .console import complete_progress, console, create_progress, log, update_progress
+from .files import FileReader, FileWriter
 from .main import main
 
 __all__ = [
+    "FileReader",
+    "FileWriter",
     "complete_progress",
     "console",
     "create_progress",

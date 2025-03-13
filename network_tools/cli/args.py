@@ -14,6 +14,8 @@ from argparse import (
 )
 from sys import argv as sys_argv, exit as sys_exit
 
+from pkg_resources import get_distribution
+
 from network_tools.constants import (
     CLI_ARGUMENTS,
     CLI_HELP_DESCRIPTION,
@@ -22,6 +24,8 @@ from network_tools.constants import (
 )
 
 from .console import log
+
+__version__ = get_distribution("network_tools").version
 
 
 def parse_args() -> Arguments:
@@ -37,7 +41,10 @@ def parse_args() -> Arguments:
         prog=CLI_HELP_NAME,
         formatter_class=Formatter,
     )
-    # Add groups and arguments
+    # Add common options
+    parser.add_argument("-V", "--version", action="version", version=__version__)
+    parser.add_argument("-v", "--verbose", action="count", default=0, help="show extra logging during run")
+    # Add sub-command groups
     for category_name, args in CLI_ARGUMENTS.items():
         category = parser.add_argument_group(category_name)
         [category.add_argument(*flags, **kwargs) for flags, kwargs in args]

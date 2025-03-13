@@ -12,6 +12,8 @@ efficient network operations.
 
 from __future__ import annotations
 
+from pkg_resources import get_distribution
+
 from .cli import (
     complete_progress,
     console,
@@ -35,3 +37,5 @@ __all__ = [
     "parse_args",
     "update_progress",
 ]
+
+__version__ = get_distribution(__name__).version

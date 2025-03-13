@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 # Network protocol constants
@@ -13,11 +14,8 @@ MAX_PORT = 65535
 # CLI constants
 
 CLI_ARGUMENTS: dict[str, list[tuple[Any]]] = {
-    "common": [
-        (["-t", "--timeout"], {"type": float, "default": 10.0, "metavar": "<10>"}),
-        (["-v", "--verbose"], {"action": "count", "default": 0}),
-    ],
-    "operation": [
+    "operations": [
+        (["-c", "--concurrency"], {"type": int, "default": 50, "metavar": "<50>"}),
         (
             ["-m", "--mode"],
             {
@@ -34,14 +32,15 @@ CLI_ARGUMENTS: dict[str, list[tuple[Any]]] = {
                 "metavar": "<auto>|http|https|ssh|telnet",
             },
         ),
+        (["-t", "--timeout"], {"type": float, "default": 10.0, "metavar": "<10>"}),
     ],
     "files": [
-        (["-i", "--input"], {"help": "Input file path", "required": True}),
+        (["-i", "--input"], {"help": "Input file path", "required": True, "type": Path}),
         (
             ["-if", "--input-format"],
             {"choices": ["csv", "json"], "default": "csv", "metavar": "<csv>|json"},
         ),
-        (["-o", "--output"], {"help": "Output file path (default: stdout)"}),
+        (["-o", "--output"], {"help": "Output file path (default: stdout)", "type": Path}),
         (
             ["-of", "--output-format"],
             {"choices": ["csv", "json", "plain"], "default": "plain", "metavar": "csv|json|<plain>"},
