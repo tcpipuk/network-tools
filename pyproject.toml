@@ -20,10 +20,7 @@ dependencies = [
   "aiofiles>=24",
   "aiohttp>=3",
   "asyncssh>=2",
-  "pandas>=2",
-  "pytest>=8",
-  "pytest-asyncio>=0.25",
-  "pytest-timeout>=2",
+  "openpyxl>=3",
   "pytz>=2025",
   "rich>=13",
   "setuptools>=76",
@@ -33,7 +30,13 @@ dependencies = [
 Homepage = "https://github.com/tcpipuk/network-tools"
 
 [dependency-groups]
-dev = ["ruff>=0.9"]
+dev = [
+  "pytest>=8",
+  "pytest-asyncio>=0.25",
+  "pytest-cov>=6.0.0",
+  "pytest-timeout>=2",
+  "ruff>=0.9",
+]
 
 [tool.uv]
 package = true
@@ -46,12 +49,29 @@ build-backend = "setuptools.build_meta"
 network-tools = "network_tools.__main__:launch"
 
 [tool.pytest.ini_options]
-addopts = "-v"
+addopts = """-v --capture=no
+  --cov=network_tools --cov-report=term-missing
+  --strict-markers --strict-config
+"""
 asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "session"
 cache_dir = "/tmp/.pytest_cache"
 filterwarnings = []
 testpaths = "tests"
+
+[tool.coverage.run]
+branch = true
+source = ["network_tools"]
+
+[tool.coverage.report]
+exclude_lines = [
+  "pragma: no cover",
+  "def __repr__",
+  "if TYPE_CHECKING:",
+  "raise NotImplementedError",
+  "if __name__ == .__main__.:",
+  "pass",
+]
 
 [tool.ruff]
 cache-dir = "/tmp/.ruff_cache"
@@ -96,6 +116,8 @@ required-imports = ["from __future__ import annotations"]
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = [
   "ARG",    # Ignore argument issues in test files
+  "DOC201", # Ignore "return" in docstrings
+  "DOC402", # Ignore "yield" in docstrings
   "RET",    # Ignore return issues in test files
   "SLF001", # private member access
 ]
