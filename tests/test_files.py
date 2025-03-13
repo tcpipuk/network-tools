@@ -67,13 +67,13 @@ def test_file_reader_csv() -> None:
     # Create a proper CSV content string with exact format
     csv_content = "host,port,protocol\n192.168.1.1,22,ssh\n192.168.1.2,23,telnet"
 
-    # Mock DictReader to return known data
+    # Mock CSVReader to return known data
     mock_csv_data = [
         {"host": "192.168.1.1", "port": "22", "protocol": "ssh"},
         {"host": "192.168.1.2", "port": "23", "protocol": "telnet"},
     ]
 
-    with patch("network_tools.cli.files.DictReader") as mock_dict_reader:
+    with patch("network_tools.cli.files.CSVReader") as mock_dict_reader:
         # Set up the mock to return our test data when iterated
         mock_dict_reader.return_value = mock_csv_data
 
@@ -81,7 +81,7 @@ def test_file_reader_csv() -> None:
         mock_path = MagicMock()
         mock_path.read_text.return_value = csv_content
 
-        # Create the reader which will use our mocked DictReader
+        # Create the reader which will use our mocked CSVReader
         reader = FileReader(path=mock_path, type="csv")
 
         # Verify the data matches what we expect
@@ -132,12 +132,12 @@ def test_file_writer_csv() -> None:
     mock_path = MagicMock()
     mock_writer = MagicMock()
 
-    # Direct patching of the DictWriter constructor
-    with patch("network_tools.cli.files.DictWriter", return_value=mock_writer) as mock_dict_writer_cls:
+    # Direct patching of the CSVWriter constructor
+    with patch("network_tools.cli.files.CSVWriter", return_value=mock_writer) as mock_dict_writer_cls:
         # Create a FileWriter with CSV type
         FileWriter(path=mock_path, type="csv", data=test_data)
 
-        # Verify DictWriter was called with correct fieldnames
+        # Verify CSVWriter was called with correct fieldnames
         mock_dict_writer_cls.assert_called_once()
 
         # Verify writeheader and writerow were called
@@ -162,7 +162,7 @@ def test_file_writer_json() -> None:
         FileWriter(path=mock_path, type="json", data=test_data)
 
         # Verify json_dump was called correctly
-        mock_json_dump.assert_called_once_with(test_data, mock_path)
+        mock_json_dump.assert_called_once_with(test_data, mock_path, indent=2)
 
 
 def test_file_writer_plain_list() -> None:
@@ -263,8 +263,8 @@ def test_file_integration(file_type: str, temp_directory: Path) -> None:
 
     # We need to patch the FileWriter functions that interact with files
     if file_type == "csv":
-        # For CSV, we'll need to patch the DictWriter
-        with patch("network_tools.cli.files.DictWriter") as mock_dict_writer_cls:
+        # For CSV, we'll need to patch the CSVWriter
+        with patch("network_tools.cli.files.CSVWriter") as mock_dict_writer_cls:
             # Set up the mock writer instance
             mock_writer = MagicMock()
             mock_dict_writer_cls.return_value = mock_writer
@@ -272,7 +272,7 @@ def test_file_integration(file_type: str, temp_directory: Path) -> None:
             # Call FileWriter
             FileWriter(path=test_file_path, type=file_type, data=test_data)
 
-            # Verify DictWriter was constructed
+            # Verify CSVWriter was constructed
             mock_dict_writer_cls.assert_called_once()
 
             # Verify writeheader and writerow were called
@@ -287,7 +287,7 @@ def test_file_integration(file_type: str, temp_directory: Path) -> None:
             FileWriter(path=test_file_path, type=file_type, data=test_data)
 
             # Verify json_dump was called correctly
-            mock_json_dump.assert_called_once_with(test_data, test_file_path)
+            mock_json_dump.assert_called_once_with(test_data, test_file_path, indent=2)
 
 
 def test_plain_text_integration() -> None:
