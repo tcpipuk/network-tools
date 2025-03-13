@@ -54,7 +54,8 @@ class AsyncTelnetClient:
 
     host: str
     port: int
-    timeout: float = field(default=5.0)
+    connect_timeout: float = field(default=5.0)
+    read_timeout: float = field(default=5.0)
     reader: StreamReader | None = field(default=None)
     writer: StreamWriter | None = field(default=None)
 
@@ -96,7 +97,7 @@ class AsyncTelnetClient:
         Raises:
             ConnectionError: If the connection attempt fails
         """
-        client = cls(host=host, port=port, timeout=time_limit, **kwargs)
+        client = cls(host=host, port=port, time_limit=time_limit, **kwargs)
         if not await client.connect():
             msg = f"Failed to connect to {host}:{port}"
             raise ConnectionError(msg)
@@ -145,7 +146,7 @@ class AsyncTelnetClient:
             return True
 
         try:
-            async with asyncio.timeout(self.timeout):
+            async with asyncio.timeout(self.connect_timeout):
                 log.info("Connecting with telnet to %s:%d", self.host, self.port)
                 self.reader, self.writer = await open_connection(self.host, self.port)
 
@@ -209,7 +210,7 @@ class AsyncTelnetClient:
 
         Args:
             size: Maximum number of bytes to read
-            time_limit: Maximum time to wait for data, defaults to self.timeout
+            time_limit: Maximum time to wait for data, defaults to self.read_timeout
 
         Returns:
             The data read from the telnet connection or empty bytes on timeout.
@@ -217,7 +218,7 @@ class AsyncTelnetClient:
         if not self.reader:
             return b""
         if time_limit is None:
-            time_limit = self.timeout
+            time_limit = self.read_timeout
 
         try:
             raw_data = await asyncio.wait_for(self.reader.read(size), timeout=time_limit)
@@ -240,7 +241,7 @@ class AsyncTelnetClient:
             return b""
 
         if time_limit is None:
-            time_limit = self.timeout
+            time_limit = self.read_timeout
 
         # Pre-allocate buffer with reasonable size to reduce reallocations
         buffer = bytearray(4096)
@@ -252,7 +253,7 @@ class AsyncTelnetClient:
 
         while asyncio.get_event_loop().time() < end_time:
             remaining = end_time - asyncio.get_event_loop().time()
-            chunk = await self.read(timeout=min(1.0, remaining))
+            chunk = await self.read(time_limit=min(1.0, remaining))
 
             if not chunk:
                 await asyncio.sleep(0.01)
@@ -367,7 +368,7 @@ class AsyncTelnetClient:
         idle_count = 0
         try:
             while True:
-                data = await self.read(timeout=0.1)
+                data = await self.read(time_limit=0.1)
                 if data:
                     log.info(data.decode(errors="replace"), end="", flush=True)
                     idle_count = 0

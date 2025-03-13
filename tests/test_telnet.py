@@ -105,82 +105,88 @@ def create_telnet_command(cmd: int, option: int) -> bytes:
     return bytes([TelnetCommand.IAC, cmd, option])
 
 
+# Patch read method for testing
+async def patched_read_method(self, size: int = 1024, time_limit: float | None = None) -> bytes:
+    """Patched read method for testing."""
+    if not self.reader:
+        return b""
+
+    # Get raw data from reader
+    raw_data = await self.reader.read(size)
+
+    # Process any telnet commands
+    return await self._process_negotiation(raw_data)
+
+
+# Patch connect method for testing
+async def patched_connect_method(self) -> bool:
+    """Patched connect method for testing."""
+    if self.is_connected:
+        return True
+
+    # Debug to check if we're losing the writer somewhere
+    log.debug("Writer before negotiation: %r", self.writer)
+
+    # Send initial negotiation options
+    initial_negotiation = self.negotiator.get_initial_negotiation()
+    if self.writer:
+        # Use direct call to the actual method to avoid any mocking issues
+        self.writer.written_data.append(initial_negotiation)
+
+        # Process any immediate responses
+        if self.reader:
+            await self._complete_negotiation()
+    return True
+
+
+# Patch write method for testing
+async def patched_write(self, data: bytes) -> None:
+    """Patched write method that properly awaits drain."""
+    if not self.writer:
+        return
+    self.writer.write(data)
+    # Handle IAC escaping
+    if data and TelnetCommand.IAC in data:
+        escaped_data = bytearray()
+        for byte in data:
+            escaped_data.append(byte)
+            if byte == TelnetCommand.IAC:
+                escaped_data.append(TelnetCommand.IAC)
+        self.writer.written_data[-1] = bytes(escaped_data)
+
+    # Safely await drain
+    try:
+        if hasattr(self.writer, "drain") and callable(self.writer.drain):
+            await self.writer.drain()
+    except Exception as e:
+        # This is a testing environment, so we'll just log the error
+        log.warning("Error draining writer: %s", e)
+
+
+# Patch complete_negotiation method for testing
+async def patched_complete_negotiation(self) -> None:
+    """Patched method to handle telnet negotiation responses."""
+    if not self.reader or not self.writer:
+        return
+
+    # Process any negotiation data in the reader
+    while self.reader.read_count < len(self.reader.return_data):
+        data = await self.reader.read(1024)
+        if data:
+            await self._process_negotiation(data)
+
+
 @asyncio_fixture(autouse=True)
 async def patch_client_methods() -> AsyncGenerator[None]:
-    """Patch the read method to handle timeout parameter."""
+    """Patch the telnet client methods for testing."""
+    # Store original methods
     original_process_negotiation = AsyncTelnetClient._process_negotiation
     original_connect = AsyncTelnetClient.connect
     original_complete_negotiation = AsyncTelnetClient._complete_negotiation
     original_read = AsyncTelnetClient.read
     original_write = AsyncTelnetClient.write
 
-    async def patched_read_method(
-        self, size: int = 1024, timeout: float | None = None, time_limit: float | None = None
-    ) -> bytes:
-        """Patched read method for testing."""
-        if not self.reader:
-            return b""
-
-        # Get raw data from reader
-        raw_data = await self.reader.read(size)
-
-        # Process any telnet commands and return processed data
-        return await original_process_negotiation(self, raw_data)
-
-    async def patched_connect_method(self) -> bool:
-        """Patched connect method for testing."""
-        if self.is_connected:
-            return True
-
-        # Debug to check if we're losing the writer somewhere
-        log.debug("Writer before negotiation: %r", self.writer)
-
-        # Send initial negotiation options
-        initial_negotiation = self.negotiator.get_initial_negotiation()
-        if self.writer:
-            # Use direct call to the actual method to avoid any mocking issues
-            self.writer.written_data.append(initial_negotiation)
-
-            # Process any immediate responses
-            if self.reader:
-                await self._complete_negotiation()
-        return True
-
-    async def patched_write(self, data: bytes) -> None:
-        """Patched write method that properly awaits drain."""
-        if not self.writer:
-            return
-        self.writer.write(data)
-        # Handle IAC escaping
-        if data and TelnetCommand.IAC in data:
-            escaped_data = bytearray()
-            for byte in data:
-                escaped_data.append(byte)
-                if byte == TelnetCommand.IAC:
-                    escaped_data.append(TelnetCommand.IAC)
-            self.writer.written_data[-1] = bytes(escaped_data)
-
-        # Safely await drain
-        try:
-            if hasattr(self.writer, "drain") and callable(self.writer.drain):
-                await self.writer.drain()
-        except Exception as e:
-            # This is a testing environment, so we'll just log the error
-            log.warning("Error draining writer: %s", e)
-
-    # Add a helper method to handle immediate negotiation responses
-    async def patched_complete_negotiation(self) -> None:
-        """Patched method to handle telnet negotiation responses."""
-        if not self.reader or not self.writer:
-            return
-
-        # Process any negotiation data in the reader
-        while self.reader.read_count < len(self.reader.return_data):
-            data = await self.reader.read(1024)
-            if data:
-                await self._process_negotiation(data)
-
-    # Apply patches at class level to ensure they affect all instances
+    # Apply patches
     AsyncTelnetClient.connect = patched_connect_method
     AsyncTelnetClient._complete_negotiation = original_complete_negotiation
     AsyncTelnetClient.read = patched_read_method
@@ -189,8 +195,8 @@ async def patch_client_methods() -> AsyncGenerator[None]:
 
     yield
 
+    # Restore original methods
     AsyncTelnetClient.read = original_read
-    # Restore original methods after tests
     AsyncTelnetClient.connect = original_connect
     AsyncTelnetClient.write = original_write
     AsyncTelnetClient._process_negotiation = original_process_negotiation

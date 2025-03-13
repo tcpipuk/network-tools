@@ -56,65 +56,168 @@ class TelnetNegotiator:
         subneg_data = bytearray()
 
         for byte in data:
-            match state:
-                case ParserState.DATA:
-                    # Processing regular data
-                    if byte == TelnetCommand.IAC:
-                        state = ParserState.IAC
-                    else:
-                        processed.append(byte)
+            state, cmd, opt, subneg_option, subneg_data, response = self._process_byte(
+                byte, state, cmd, opt, subneg_option, subneg_data
+            )
 
-                case ParserState.IAC:
-                    # Received IAC, expecting a command
-                    match byte:
-                        case TelnetCommand.IAC:
-                            # Escaped IAC - literal 255
-                            processed.append(byte)
-                            state = ParserState.DATA
-                        case TelnetCommand.SB:
-                            state = ParserState.SUBNEG
-                            subneg_data = bytearray()
-                            # Next byte will be the option
-                        case _ if TelnetCommand.is_negotiation(byte):
-                            # Negotiation command (DO/DONT/WILL/WONT)
-                            cmd = byte
-                            state = ParserState.COMMAND
-                        case _:
-                            # Unknown command, ignore
-                            state = ParserState.DATA
-
-                case ParserState.COMMAND:
-                    # Got the option for a command
-                    opt = byte
-                    responses.append(self._handle_negotiation(cmd, opt))
-                    state = ParserState.DATA
-
-                case ParserState.SUBNEG:
-                    # Inside subnegotiation
-                    if byte == TelnetCommand.IAC:
-                        state = ParserState.SUBNEG_IAC
-                    elif not subneg_data:
-                        # First byte is the option
-                        subneg_option = byte
-                    else:
-                        # Data part of subnegotiation
-                        subneg_data.append(byte)
-
-                case ParserState.SUBNEG_IAC:
-                    match byte:
-                        case TelnetCommand.SE:
-                            # End of subnegotiation
-                            subneg_response = self._handle_subnegotiation(subneg_option, bytes(subneg_data))
-                            if subneg_response:
-                                responses.append(subneg_response)
-                            state = ParserState.DATA
-                        case _:
-                            # Escaped IAC within subnegotiation
-                            subneg_data.append(TelnetCommand.IAC)
-                            subneg_data.append(byte)
-                            state = ParserState.SUBNEG
+            # Update our processed data and responses
+            if isinstance(response, bytes) and response:
+                # It's a telnet response
+                responses.append(response)
+            elif isinstance(response, int):
+                # It's a byte to add to processed data
+                processed.append(response)
 
         return bytes(processed), responses
+
+    def _process_byte(
+        self, byte: int, state: int, cmd: int, opt: int, subneg_option: int, subneg_data: bytearray
+    ) -> tuple[int, int, int, int, bytearray, bytes | int | None]:
+        """Process a single byte in the telnet state machine.
+
+        Args:
+            byte: The current byte being processed
+            state: Current parser state
+            cmd: Current command byte
+            opt: Current option byte
+            subneg_option: Current subnegotiation option
+            subneg_data: Current subnegotiation data
+
+        Returns:
+            Tuple containing updated (state, cmd, opt, subneg_option, subneg_data, response)
+            where response can be bytes (telnet response), int (data byte), or None
+        """
+        # Dispatch to state-specific handlers
+        match state:
+            case ParserState.DATA:
+                return self._process_data_state(byte, cmd, opt, subneg_option, subneg_data)
+            case ParserState.IAC:
+                return self._process_iac_state(byte, cmd, opt, subneg_option, subneg_data)
+            case ParserState.COMMAND:
+                return self._process_command_state(byte, cmd, subneg_option, subneg_data)
+            case ParserState.SUBNEG:
+                return self._process_subneg_state(byte, cmd, opt, subneg_option, subneg_data)
+            case ParserState.SUBNEG_IAC:
+                return self._process_subneg_iac_state(byte, cmd, opt, subneg_option, subneg_data)
+            case _:
+                # Unknown state, reset to DATA
+                return ParserState.DATA, cmd, opt, subneg_option, subneg_data, None
+
+    @staticmethod
+    def _process_data_state(
+        byte: int, cmd: int, opt: int, subneg_option: int, subneg_data: bytearray
+    ) -> tuple[int, int, int, int, bytearray, bytes | int | None]:
+        """Process a byte in DATA state.
+
+        Args:
+            byte: The current byte being processed
+            cmd: Current command byte
+            opt: Current option byte
+            subneg_option: Current subnegotiation option
+            subneg_data: Current subnegotiation data
+
+        Returns:
+            Tuple containing updated (state, cmd, opt, subneg_option, subneg_data, response)
+        """
+        if byte == TelnetCommand.IAC:
+            return ParserState.IAC, cmd, opt, subneg_option, subneg_data, None
+        return ParserState.DATA, cmd, opt, subneg_option, subneg_data, byte
+
+    @staticmethod
+    def _process_iac_state(
+        byte: int, cmd: int, opt: int, subneg_option: int, subneg_data: bytearray
+    ) -> tuple[int, int, int, int, bytearray, bytes | int | None]:
+        """Process a byte in IAC state.
+
+        Args:
+            byte: The current byte being processed
+            cmd: Current command byte
+            opt: Current option byte
+            subneg_option: Current subnegotiation option
+            subneg_data: Current subnegotiation data
+
+        Returns:
+            Tuple containing updated (state, cmd, opt, subneg_option, subneg_data, response)
+        """
+        match byte:
+            case TelnetCommand.IAC:
+                # Escaped IAC - literal 255
+                return ParserState.DATA, cmd, opt, subneg_option, subneg_data, byte
+            case TelnetCommand.SB:
+                return ParserState.SUBNEG, cmd, opt, subneg_option, bytearray(), None
+            case _ if TelnetCommand.is_negotiation(byte):
+                # Negotiation command (DO/DONT/WILL/WONT)
+                return ParserState.COMMAND, byte, opt, subneg_option, subneg_data, None
+            case _:
+                # Unknown command, ignore
+                return ParserState.DATA, cmd, opt, subneg_option, subneg_data, None
+
+    def _process_command_state(
+        self, byte: int, cmd: int, subneg_option: int, subneg_data: bytearray
+    ) -> tuple[int, int, int, int, bytearray, bytes | int | None]:
+        """Process a byte in COMMAND state.
+
+        Args:
+            byte: The current byte being processed
+            cmd: Current command byte
+            subneg_option: Current subnegotiation option
+            subneg_data: Current subnegotiation data
+
+        Returns:
+            Tuple containing updated (state, cmd, opt, subneg_option, subneg_data, response)
+        """
+        # Got the option for a command
+        response = self._handle_negotiation(cmd, byte)
+        return ParserState.DATA, cmd, byte, subneg_option, subneg_data, response
+
+    @staticmethod
+    def _process_subneg_state(
+        byte: int, cmd: int, opt: int, subneg_option: int, subneg_data: bytearray
+    ) -> tuple[int, int, int, int, bytearray, bytes | int | None]:
+        """Process a byte in SUBNEG state.
+
+        Args:
+            byte: The current byte being processed
+            cmd: Current command byte
+            opt: Current option byte
+            subneg_option: Current subnegotiation option
+            subneg_data: Current subnegotiation data
+
+        Returns:
+            Tuple containing updated (state, cmd, opt, subneg_option, subneg_data, response)
+        """
+        if byte == TelnetCommand.IAC:
+            return ParserState.SUBNEG_IAC, cmd, opt, subneg_option, subneg_data, None
+        if not subneg_data:
+            # First byte is the option
+            return ParserState.SUBNEG, cmd, opt, byte, subneg_data, None
+        # Data part of subnegotiation
+        subneg_data.append(byte)
+        return ParserState.SUBNEG, cmd, opt, subneg_option, subneg_data, None
+
+    def _process_subneg_iac_state(
+        self, byte: int, cmd: int, opt: int, subneg_option: int, subneg_data: bytearray
+    ) -> tuple[int, int, int, int, bytearray, bytes | int | None]:
+        """Process a byte in SUBNEG_IAC state.
+
+        Args:
+            byte: The current byte being processed
+            cmd: Current command byte
+            opt: Current option byte
+            subneg_option: Current subnegotiation option
+            subneg_data: Current subnegotiation data
+
+        Returns:
+            Tuple containing updated (state, cmd, opt, subneg_option, subneg_data, response)
+        """
+        if byte == TelnetCommand.SE:
+            # End of subnegotiation
+            response = self._handle_subnegotiation(subneg_option, bytes(subneg_data))
+            return ParserState.DATA, cmd, opt, subneg_option, subneg_data, response
+        # Escaped IAC within subnegotiation
+        subneg_data.append(TelnetCommand.IAC)
+        subneg_data.append(byte)
+        return ParserState.SUBNEG, cmd, opt, subneg_option, subneg_data, None
 
     def _handle_negotiation(self, cmd: int, option: int) -> bytes:
         """Process a single telnet negotiation command.
@@ -138,7 +241,7 @@ class TelnetNegotiator:
             case TelnetCommand.DO | TelnetCommand.WILL:
                 # Server is asking us to enable an option (DO)
                 # or announcing it will enable an option (WILL)
-                if self._should_accept_option(option, cmd):
+                if self._should_accept_option(option):
                     # We'll accept this option
                     self._update_option_state(option, cmd, True)
                     return NegotiationResponse.accept(cmd, option)
@@ -151,12 +254,12 @@ class TelnetNegotiator:
                 self._update_option_state(option, cmd, False)
                 return NegotiationResponse.accept(cmd, option)
 
-    def _should_accept_option(self, option: int, cmd: int) -> bool:
+    @staticmethod
+    def _should_accept_option(option: int) -> bool:
         """Determine if we should accept an option.
 
         Args:
             option: The option being negotiated
-            cmd: The command (DO/WILL)
 
         Returns:
             True if we should accept the option, False otherwise
@@ -222,13 +325,12 @@ class TelnetNegotiator:
                 return TelnetSequence.create_subnegotiation(option, bytes(response))
         return b""
 
-    def _handle_window_size(self, option: int, cmd: int, data: bytes = b"") -> bytes:
+    def _handle_window_size(self, option: int, cmd: int, _data: bytes = b"") -> bytes:
         """Handle window size option negotiation.
 
         Args:
             option: The option being negotiated
             cmd: The command (DO/WILL/SB)
-            data: The subnegotiation data (for SB)
 
         Returns:
             The response to send to the server

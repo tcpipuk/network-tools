@@ -118,6 +118,7 @@ required-imports = ["from __future__ import annotations"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = [
+  "ANN001", # Ignore missing type annotations
   "ARG",    # Ignore argument issues in test files
   "DOC201", # Ignore "return" in docstrings
   "DOC402", # Ignore "yield" in docstrings
