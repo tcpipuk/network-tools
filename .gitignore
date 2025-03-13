@@ -1,0 +1,15 @@
+# Development files
+__pycache__
+.pytest_cache
+.ruff_cache
+.venv/
+env/
+venv/
+
+# User files
+.env
+*.log
+
+# Build files
+*.egg-info
+*.pyc
